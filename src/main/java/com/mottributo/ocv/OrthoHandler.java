@@ -4,13 +4,10 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ActiveRenderInfo;
 import net.minecraft.client.settings.KeyBinding;
 import net.minecraft.util.MathHelper;
-import net.minecraft.util.Vec3;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
-import net.minecraftforge.client.event.MouseEvent;
 import net.minecraftforge.client.event.RenderGameOverlayEvent;
 
 import org.lwjgl.input.Keyboard;
-import org.lwjgl.input.Mouse;
 import org.lwjgl.opengl.GL11;
 
 import cpw.mods.fml.client.registry.ClientRegistry;
@@ -24,7 +21,6 @@ import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 // TODO Add it as a 4th camera view mode instead of an addon triggered by pressing numpad5.
 // TODO Complete fullscreen world edit functionality.
 // So far it feels slightly compressed, perhaps it raycasts using the regular projection?..
-// Do a proper Modrinth branch.
 
 public class OrthoHandler {
 
@@ -48,19 +44,14 @@ public class OrthoHandler {
     private final KeyBinding keyRotateT = new KeyBinding("Look from top", Keyboard.KEY_NUMPAD7, KEY_CATEGORY);
     private final KeyBinding keyRotateF = new KeyBinding("Look from front", Keyboard.KEY_NUMPAD1, KEY_CATEGORY);
     private final KeyBinding keyRotateS = new KeyBinding("Look from side", Keyboard.KEY_NUMPAD3, KEY_CATEGORY);
-    private final KeyBinding keyClip = new KeyBinding("Clip terrain", Keyboard.KEY_MULTIPLY, KEY_CATEGORY);
     private final KeyBinding keyTether = new KeyBinding("Free/tethered cam toggle", Keyboard.KEY_DIVIDE, KEY_CATEGORY);
 
     /** Whether the orthogonal camera mode is on. */
     private boolean isEnabled;
     /**
      * Whether the cam's angle is tethered to the player's angle. True when tethered.
-     * If false and the orthogonal view is enabled,
-     * the player can manipulate the world from any point visible from the viewport.
      **/
     private boolean isCamTethered;
-    /** Whether to remove all geometry between the camera and the player. Crappy means of seeing through buildings. */
-    private boolean isClipping;
 
     private float zoom;
     private float xRot;
@@ -81,7 +72,6 @@ public class OrthoHandler {
         ClientRegistry.registerKeyBinding(keyRotateT);
         ClientRegistry.registerKeyBinding(keyRotateF);
         ClientRegistry.registerKeyBinding(keyRotateS);
-        ClientRegistry.registerKeyBinding(keyClip);
         ClientRegistry.registerKeyBinding(keyTether);
 
         reset();
@@ -89,7 +79,6 @@ public class OrthoHandler {
 
     private void reset() {
         isCamTethered = false;
-        isClipping = false;
 
         zoom = 8;
         xRot = 30;
@@ -122,13 +111,8 @@ public class OrthoHandler {
         if (keyToggle.isPressed()) {
             toggle();
         } else if (isEnabled) {
-            if (keyClip.isPressed()) {
-                isClipping = !isClipping;
-            } else if (keyTether.isPressed()) {
+            if (keyTether.isPressed()) {
                 isCamTethered = !isCamTethered;
-                if (isCamTethered) { // recover the grab on tethering the camera
-                    mc.mouseHelper.grabMouseCursor();
-                }
             } else if (keyRotateT.isPressed()) {
                 xRot = mod ? -90 : 90;
                 yRot = 0;
@@ -190,11 +174,6 @@ public class OrthoHandler {
 
         Minecraft mc = Minecraft.getMinecraft();
 
-        // Releases the cursor for whole viewport world edit purposes.
-        if (Mouse.isGrabbed() && !isCamTethered) {
-            mc.mouseHelper.ungrabMouseCursor();
-        }
-
         // update zoom and rotation
         if (!modifierKeyPressed()) {
             int ticksElapsed = tick - tickPrevious;
@@ -221,7 +200,7 @@ public class OrthoHandler {
             GL11.glScaled(cameraZoom, cameraZoom, 1);
         }
 
-        GL11.glOrtho(-width, width, -height, height, isClipping ? 0 : -9999, 9999);
+        GL11.glOrtho(-width, width, -height, height, -9999, 9999);
 
         if (isCamTethered) {
             // rotate the orthographic camera with the player view
@@ -245,53 +224,8 @@ public class OrthoHandler {
             ActiveRenderInfo.rotationXY = ActiveRenderInfo.rotationX * MathHelper.sin(pitch * (float) Math.PI / 180f);
             ActiveRenderInfo.rotationXZ = MathHelper.cos(pitch * (float) Math.PI / 180f);
             // ]
-
-            getOrthoMouseOver(mc, (float) event.renderPartialTicks);
-
         }
 
-    }
-
-    // Determines how to edit the world given the free mouse.
-    private void getOrthoMouseOver(Minecraft mc, float partialTicks) {
-        // Do nothing if nothing to render?
-        if (mc.renderViewEntity == null) return;
-        // Do nothing if no world yet to edit.
-        if (mc.theWorld == null) return;
-
-        float width = zoom * (mc.displayWidth / (float) mc.displayHeight);
-        float height = zoom * (mc.displayHeight / (float) mc.displayWidth);
-
-        // normalize mouse to -1..1
-        float mx = ((float) Mouse.getX() / mc.displayWidth - 0.5F) * 2.0F;
-        float my = ((float) Mouse.getY() / mc.displayHeight - 0.5F) * 2.0F;
-
-        float rz = MathHelper.cos(-yRot * 0.017453292F - (float) Math.PI);
-        float rx = MathHelper.sin(-yRot * 0.017453292F - (float) Math.PI);
-        float rxz = -MathHelper.cos(-xRot * 0.017453292F);
-        float ry = MathHelper.sin(-xRot * 0.017453292F);
-
-        Vec3 look = Vec3.createVectorHelper((double) (rx * rxz), (double) ry, (double) (rz * rxz));
-        Vec3 pos = mc.renderViewEntity.getPosition(partialTicks);
-
-        // Move to mouse position
-        Vec3 from = pos.addVector((double) (-rz * rxz) * mx * width, 0, (double) (rx * rxz) * mx * width);
-        Vec3 to = from.addVector(look.xCoord * 16, look.yCoord * 16, look.zCoord * 16);
-
-        mc.pointedEntity = null;
-        mc.objectMouseOver = mc.theWorld.rayTraceBlocks(from, to);
-
-    }
-
-    @SubscribeEvent
-    public void onMouseEvent(MouseEvent event) {
-        if (!isEnabled) { // Do nothing if the ortho cam is not enabled
-            return;
-        }
-        if (!isCamTethered) {
-            // If the camera's angle isn't dependent on the player angle and thus on the mouse movement
-            getOrthoMouseOver(Minecraft.getMinecraft(), 1.0F);
-        }
     }
 
     @SubscribeEvent
