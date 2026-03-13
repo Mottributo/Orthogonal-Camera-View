@@ -19,6 +19,13 @@ import cpw.mods.fml.common.gameevent.InputEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.ClientTickEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 
+// TODO Lock movement of WASD to the position where the character's view is always set to be cardinal to the camera.
+// So far it's annoying to reposition the character while the camera is, um, yea.
+// TODO Add it as a 4th camera view mode instead of an addon triggered by pressing numpad5.
+// TODO Complete fullscreen world edit functionality.
+// So far it feels slightly compressed, perhaps it raycasts using the regular projection?..
+// Do a proper Modrinth branch.
+
 public class OrthoHandler {
 
     /**
