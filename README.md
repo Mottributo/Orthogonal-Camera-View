@@ -9,6 +9,7 @@ Want to -
 Well aren't you lucky, huh.
 
 This mod adds an isometric camera mode to fullfill all these needs and beyond. Billions will be satisfied, trillions will be fed subpar quality camera work.
+It also attempts to enable non-player-dependent world manipulation, so you can place blocks anywhere the mouse points to, albeit this is still in development.
 Really, this mod's been greatly due for 1.7.10.
 
 ## How to use
