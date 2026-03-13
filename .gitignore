@@ -37,3 +37,4 @@ addon.late.local.gradle.kts
 layout.json
 TODO.md
 *.kate-swp
+REMINDER_ON_GRADLE.md
