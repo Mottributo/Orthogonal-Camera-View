@@ -8,7 +8,7 @@
 		"mcversion": "${minecraftVersion}",
 		"url": "https://github.com/Mottributo/Orthogonal-Camera-View",
 		"updateUrl": "",
-		"authorList": ["SinTho0r4s", "MellowArpeggiation", "Mottributo"],
+		"authorList": ["SinTho0r4s (Original template author)", "MellowArpeggiation (Original code author)", "Mottributo" (Maintainer)],
 		"credits": "",
 		"logoFile": "/icon.png",
 		"screenshots": [],
