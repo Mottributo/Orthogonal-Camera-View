@@ -31,7 +31,7 @@ public class OrthoHandler {
     /**
      * Misc debug data in the F3 menu. TODO expose to config file.
      */
-    public static final boolean debugMode = true;
+    public static final boolean debugMode = false;
     private static final String KEY_CATEGORY = "Orthogonal Camera View";
     private static final float ZOOM_STEP = 0.5f;
     private static final float ROTATE_STEP = 15;
