@@ -7,6 +7,7 @@ import net.minecraft.util.MathHelper;
 import net.minecraft.util.Vec3;
 import net.minecraftforge.client.event.EntityViewRenderEvent;
 import net.minecraftforge.client.event.MouseEvent;
+import net.minecraftforge.client.event.RenderGameOverlayEvent;
 
 import org.lwjgl.input.Keyboard;
 import org.lwjgl.input.Mouse;
@@ -20,9 +21,14 @@ import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 
 public class OrthoHandler {
 
+    /**
+     * Misc debug data in the F3 menu. TODO expose to config file.
+     */
+    public static final boolean debugMode = true;
     private static final String KEY_CATEGORY = "Orthogonal Camera View";
     private static final float ZOOM_STEP = 0.5f;
     private static final float ROTATE_STEP = 15;
+    // TODO check are there mods which make this variable, and ensure integration with these.
     private static final float SECONDS_PER_TICK = 1f / 20f;
 
     private final KeyBinding keyToggle = new KeyBinding("Toggle", Keyboard.KEY_NUMPAD5, KEY_CATEGORY);
@@ -36,10 +42,18 @@ public class OrthoHandler {
     private final KeyBinding keyRotateF = new KeyBinding("Look from front", Keyboard.KEY_NUMPAD1, KEY_CATEGORY);
     private final KeyBinding keyRotateS = new KeyBinding("Look from side", Keyboard.KEY_NUMPAD3, KEY_CATEGORY);
     private final KeyBinding keyClip = new KeyBinding("Clip terrain", Keyboard.KEY_MULTIPLY, KEY_CATEGORY);
+    private final KeyBinding keyTether = new KeyBinding("Free/tethered cam toggle", Keyboard.KEY_DIVIDE, KEY_CATEGORY);
 
-    private boolean enabled;
-    private boolean freeCam;
-    private boolean clip;
+    /** Whether the orthogonal camera mode is on. */
+    private boolean isEnabled;
+    /**
+     * Whether the cam's angle is tethered to the player's angle. True when tethered.
+     * If false and the orthogonal view is enabled,
+     * the player can manipulate the world from any point visible from the viewport.
+     **/
+    private boolean isCamTethered;
+    /** Whether to remove all geometry between the camera and the player. Crappy means of seeing through buildings. */
+    private boolean isClipping;
 
     private float zoom;
     private float xRot;
@@ -61,13 +75,14 @@ public class OrthoHandler {
         ClientRegistry.registerKeyBinding(keyRotateF);
         ClientRegistry.registerKeyBinding(keyRotateS);
         ClientRegistry.registerKeyBinding(keyClip);
+        ClientRegistry.registerKeyBinding(keyTether);
 
         reset();
     }
 
     private void reset() {
-        freeCam = false;
-        clip = false;
+        isCamTethered = false;
+        isClipping = false;
 
         zoom = 8;
         xRot = 30;
@@ -77,30 +92,14 @@ public class OrthoHandler {
         partialPrevious = 0;
     }
 
-    public boolean isEnabled() {
-        return enabled;
-    }
-
-    public void enable() {
-        if (!enabled) {
-            reset();
-        }
-
-        enabled = true;
-    }
-
-    public void disable() {
-        Minecraft mc = Minecraft.getMinecraft();
-        mc.mouseHelper.grabMouseCursor();
-
-        enabled = false;
-    }
-
     public void toggle() {
-        if (isEnabled()) {
-            disable();
-        } else {
-            enable();
+        if (isEnabled) { // Disable
+            Minecraft mc = Minecraft.getMinecraft();
+            mc.mouseHelper.grabMouseCursor();
+            isEnabled = false;
+        } else { // Enable
+            reset();
+            isEnabled = true;
         }
     }
 
@@ -111,33 +110,37 @@ public class OrthoHandler {
     @SubscribeEvent
     public void onKeyInput(InputEvent.KeyInputEvent evt) {
         boolean mod = modifierKeyPressed();
+        Minecraft mc = Minecraft.getMinecraft();
 
         if (keyToggle.isPressed()) {
-            if (mod) {
-                freeCam = !freeCam;
-            } else {
-                toggle();
+            toggle();
+        } else if (isEnabled) {
+            if (keyClip.isPressed()) {
+                isClipping = !isClipping;
+            } else if (keyTether.isPressed()) {
+                isCamTethered = !isCamTethered;
+                if (isCamTethered) { // recover the grab on tethering the camera
+                    mc.mouseHelper.grabMouseCursor();
+                }
+            } else if (keyRotateT.isPressed()) {
+                xRot = mod ? -90 : 90;
+                yRot = 0;
+            } else if (keyRotateF.isPressed()) {
+                xRot = 0;
+                yRot = mod ? -90 : 90;
+            } else if (keyRotateS.isPressed()) {
+                xRot = 0;
+                yRot = mod ? 180 : 0;
             }
-        } else if (keyClip.isPressed()) {
-            clip = !clip;
-        } else if (keyRotateT.isPressed()) {
-            xRot = mod ? -90 : 90;
-            yRot = 0;
-        } else if (keyRotateF.isPressed()) {
-            xRot = 0;
-            yRot = mod ? -90 : 90;
-        } else if (keyRotateS.isPressed()) {
-            xRot = 0;
-            yRot = mod ? 180 : 0;
-        }
 
-        if (mod) {
-            // snap values to step units
-            xRot -= xRot % ROTATE_STEP;
-            yRot -= yRot % ROTATE_STEP;
-            zoom -= zoom % ZOOM_STEP;
+            if (mod) {
+                // snap values to step units
+                xRot -= xRot % ROTATE_STEP;
+                yRot -= yRot % ROTATE_STEP;
+                zoom -= zoom % ZOOM_STEP;
 
-            updateZoomAndRotation(1);
+                updateZoomAndRotation(1);
+            }
         }
     }
 
@@ -163,27 +166,25 @@ public class OrthoHandler {
 
     @SubscribeEvent
     public void onTick(ClientTickEvent evt) {
-        if (!enabled) {
-            return;
-        }
-
-        if (evt.phase != Phase.START) {
+        if (!isEnabled || evt.phase != Phase.START) {
             return;
         }
 
         tick++;
     }
 
+    // This seems to fire every tick while the ortho mode is enabled.
+    // Allegedly, before the fog density is calculated - this keeps fog relative to the player's position.
     @SubscribeEvent
     public void onFogDensity(EntityViewRenderEvent.FogDensity event) {
-        if (!enabled) {
+        if (!isEnabled) {
             return;
         }
 
         Minecraft mc = Minecraft.getMinecraft();
 
-        // leggo of the cursor
-        if (Mouse.isGrabbed()) {
+        // Releases the cursor for whole viewport world edit purposes.
+        if (Mouse.isGrabbed() && !isCamTethered) {
             mc.mouseHelper.ungrabMouseCursor();
         }
 
@@ -213,9 +214,9 @@ public class OrthoHandler {
             GL11.glScaled(cameraZoom, cameraZoom, 1);
         }
 
-        GL11.glOrtho(-width, width, -height, height, clip ? 0 : -9999, 9999);
+        GL11.glOrtho(-width, width, -height, height, isClipping ? 0 : -9999, 9999);
 
-        if (freeCam) {
+        if (isCamTethered) {
             // rotate the orthographic camera with the player view
             xRot = mc.thePlayer.rotationPitch;
             yRot = mc.thePlayer.rotationYaw;
@@ -227,8 +228,8 @@ public class OrthoHandler {
         GL11.glRotatef(xRot, 1, 0, 0);
         GL11.glRotatef(yRot + 180.0F, 0, 1, 0);
 
-        // fix particle rotation
-        if (!freeCam) {
+        if (!isCamTethered) {
+            // [ This fixes particle rotation.
             float pitch = xRot;
             float yaw = yRot;
             ActiveRenderInfo.rotationX = MathHelper.cos(yaw * (float) Math.PI / 180f);
@@ -236,19 +237,25 @@ public class OrthoHandler {
             ActiveRenderInfo.rotationYZ = -ActiveRenderInfo.rotationZ * MathHelper.sin(pitch * (float) Math.PI / 180f);
             ActiveRenderInfo.rotationXY = ActiveRenderInfo.rotationX * MathHelper.sin(pitch * (float) Math.PI / 180f);
             ActiveRenderInfo.rotationXZ = MathHelper.cos(pitch * (float) Math.PI / 180f);
+            // ]
+
+            getOrthoMouseOver(mc, (float) event.renderPartialTicks);
+
         }
 
-        getOrthoMouseOver(mc, (float) event.renderPartialTicks);
     }
 
+    // Determines how to edit the world given the free mouse.
     private void getOrthoMouseOver(Minecraft mc, float partialTicks) {
+        // Do nothing if nothing to render?
         if (mc.renderViewEntity == null) return;
+        // Do nothing if no world yet to edit.
         if (mc.theWorld == null) return;
 
         float width = zoom * (mc.displayWidth / (float) mc.displayHeight);
-        float height = zoom;
+        float height = zoom * (mc.displayHeight / (float) mc.displayWidth);
 
-        // normalise mouse to -1..1
+        // normalize mouse to -1..1
         float mx = ((float) Mouse.getX() / mc.displayWidth - 0.5F) * 2.0F;
         float my = ((float) Mouse.getY() / mc.displayHeight - 0.5F) * 2.0F;
 
@@ -266,15 +273,37 @@ public class OrthoHandler {
 
         mc.pointedEntity = null;
         mc.objectMouseOver = mc.theWorld.rayTraceBlocks(from, to);
+
     }
 
     @SubscribeEvent
     public void onMouseEvent(MouseEvent event) {
-        if (!enabled) {
+        if (!isEnabled) { // Do nothing if the ortho cam is not enabled
             return;
         }
+        if (!isCamTethered) {
+            // If the camera's angle isn't dependent on the player angle and thus on the mouse movement
+            getOrthoMouseOver(Minecraft.getMinecraft(), 1.0F);
+        }
+    }
 
-        getOrthoMouseOver(Minecraft.getMinecraft(), 1.0F);
+    @SubscribeEvent
+    // Debug stuff.
+    public void onDebugOverlay(RenderGameOverlayEvent.Text event) {
+        if (!Minecraft.getMinecraft().gameSettings.showDebugInfo) return;
+        if (debugMode) {
+            event.right.add("----OCV DEBUG MODE ON----");
+            event.right.add("isEnabled: " + isEnabled);
+            event.right.add("isCamTethered: " + isCamTethered);
+            event.right.add("zoom: " + zoom);
+            event.right.add("xRot, yRot: " + xRot + ", " + yRot);
+            for (int key = 0; key < Keyboard.KEYBOARD_SIZE; key++) {
+                if (Keyboard.isKeyDown(key)) {
+                    String keyName = Keyboard.getKeyName(key);
+                    event.right.add("Pressed: " + keyName);
+                }
+            }
+        }
     }
 
 }
