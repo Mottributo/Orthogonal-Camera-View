@@ -3,7 +3,7 @@
 	"modList": [{
 		"modid": "${modId}",
 		"name": "${modName}",
-		"description": "Adds orthogonal/isometric camera view to Minecraft. Good for strategic view.",
+		"description": "Adds orthogonal/isometric camera view to Minecraft 1.7.10. Good for strategic view.",
 		"version": "${modVersion}",
 		"mcversion": "${minecraftVersion}",
 		"url": "https://github.com/Mottributo/Orthogonal-Camera-View",
