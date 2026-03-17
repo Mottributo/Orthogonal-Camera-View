@@ -48,6 +48,7 @@ public class OrthoHandler {
     private final KeyBinding keyRotateT = new KeyBinding("Look from top", Keyboard.KEY_NUMPAD7, KEY_CATEGORY);
     private final KeyBinding keyRotateF = new KeyBinding("Look from front", Keyboard.KEY_NUMPAD1, KEY_CATEGORY);
     private final KeyBinding keyRotateS = new KeyBinding("Look from side", Keyboard.KEY_NUMPAD3, KEY_CATEGORY);
+    private final KeyBinding keyRotateC = new KeyBinding("Look from corner", Keyboard.KEY_NUMPAD9, KEY_CATEGORY);
     private final KeyBinding keyClip = new KeyBinding("Clip terrain", Keyboard.KEY_MULTIPLY, KEY_CATEGORY);
     private final KeyBinding keyTether = new KeyBinding("Free/tethered cam toggle", Keyboard.KEY_DIVIDE, KEY_CATEGORY);
 
@@ -81,6 +82,7 @@ public class OrthoHandler {
         ClientRegistry.registerKeyBinding(keyRotateT);
         ClientRegistry.registerKeyBinding(keyRotateF);
         ClientRegistry.registerKeyBinding(keyRotateS);
+        ClientRegistry.registerKeyBinding(keyRotateC);
         ClientRegistry.registerKeyBinding(keyClip);
         ClientRegistry.registerKeyBinding(keyTether);
 
@@ -92,8 +94,10 @@ public class OrthoHandler {
         isClipping = false;
 
         zoom = 8;
-        xRot = 30;
-        yRot = -45;
+        // These two values shouldn't be used in game, it's just that
+        // reset() in pre-initialization Forge stage can't reference Minecraft
+        xRot = 30; // Replaced by mc.thePlayer.rotationPitch in toggle()
+        yRot = 45; // Replaced by mc.thePlayer.rotationYaw in toggle()
         tick = 0;
         tickPrevious = 0;
         partialPrevious = 0;
@@ -106,6 +110,9 @@ public class OrthoHandler {
             isEnabled = false;
         } else { // Enable
             reset();
+            Minecraft mc = Minecraft.getMinecraft();
+            xRot = mc.thePlayer.rotationPitch;
+            yRot = mc.thePlayer.rotationYaw;
             isEnabled = true;
         }
     }
@@ -129,6 +136,9 @@ public class OrthoHandler {
                 if (isCamTethered) { // recover the grab on tethering the camera
                     mc.mouseHelper.grabMouseCursor();
                 }
+            } else if (keyRotateC.isPressed()) {
+                xRot = 30;
+                yRot = mod? -45: 45;
             } else if (keyRotateT.isPressed()) {
                 xRot = mod ? -90 : 90;
                 yRot = 0;
