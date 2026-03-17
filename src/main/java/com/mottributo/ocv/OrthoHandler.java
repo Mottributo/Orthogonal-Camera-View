@@ -269,6 +269,9 @@ public class OrthoHandler {
     }
 
     // Determines how to edit the world given the free mouse.
+    // TODO total rewrite with a mixin to override the original block selection code.
+    // The original block selection procedure converts player position data and player head rotation data
+    // to two block coordinates,
     private void getOrthoMouseOver(Minecraft mc, float partialTicks) {
         // Do nothing if nothing to render?
         if (mc.renderViewEntity == null) return;
@@ -279,19 +282,20 @@ public class OrthoHandler {
         float height = zoom * (mc.displayHeight / (float) mc.displayWidth);
 
         // normalize mouse to -1..1
+
         float mx = ((float) Mouse.getX() / mc.displayWidth - 0.5F) * 2.0F;
         float my = ((float) Mouse.getY() / mc.displayHeight - 0.5F) * 2.0F;
+        // The fuck this does?
+        float rotate_z = MathHelper.cos(-yRot * 0.017453292F - (float) Math.PI);
+        float rotate_x = MathHelper.sin(-yRot * 0.017453292F - (float) Math.PI);
+        float rotate_xz = -MathHelper.cos(-xRot * 0.017453292F);
+        float rotate_y = MathHelper.sin(-xRot * 0.017453292F);
 
-        float rz = MathHelper.cos(-yRot * 0.017453292F - (float) Math.PI);
-        float rx = MathHelper.sin(-yRot * 0.017453292F - (float) Math.PI);
-        float rxz = -MathHelper.cos(-xRot * 0.017453292F);
-        float ry = MathHelper.sin(-xRot * 0.017453292F);
-
-        Vec3 look = Vec3.createVectorHelper((double) (rx * rxz), (double) ry, (double) (rz * rxz));
+        Vec3 look = Vec3.createVectorHelper((double) (rotate_x * rotate_xz), (double) rotate_y, (double) (rotate_z * rotate_xz));
         Vec3 pos = mc.renderViewEntity.getPosition(partialTicks);
 
         // Move to mouse position
-        Vec3 from = pos.addVector((double) (-rz * rxz) * mx * width, 0, (double) (rx * rxz) * mx * width);
+        Vec3 from = pos.addVector((double) (-rotate_z * rotate_xz) * mx * width, 0, (double) (rotate_x * rotate_xz) * mx * height);
         Vec3 to = from.addVector(look.xCoord * 16, look.yCoord * 16, look.zCoord * 16);
 
         mc.pointedEntity = null;
@@ -313,13 +317,15 @@ public class OrthoHandler {
     @SubscribeEvent
     // Debug stuff.
     public void onDebugOverlay(RenderGameOverlayEvent.Text event) {
-        if (!Minecraft.getMinecraft().gameSettings.showDebugInfo) return;
+        Minecraft mc = Minecraft.getMinecraft();
+        if (!mc.gameSettings.showDebugInfo) return;
         if (debugMode) {
             event.right.add("----OCV DEBUG MODE ON----");
             event.right.add("isEnabled: " + isEnabled);
             event.right.add("isCamTethered: " + isCamTethered);
             event.right.add("zoom: " + zoom);
             event.right.add("xRot, yRot: " + xRot + ", " + yRot);
+            event.right.add(mc.displayWidth + "-" + mc.displayHeight);
             for (int key = 0; key < Keyboard.KEYBOARD_SIZE; key++) {
                 if (Keyboard.isKeyDown(key)) {
                     String keyName = Keyboard.getKeyName(key);
