@@ -24,7 +24,7 @@ import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 // TODO Add it as a 4th camera view mode instead of an addon triggered by pressing numpad5.
 // TODO Complete fullscreen world edit functionality.
 // So far it feels slightly compressed, perhaps it raycasts using the regular projection?..
-// Do a proper Modrinth branch.
+// TODO a properly done Modrinth branch that only forbids using the camera in multiplayer.
 
 public class OrthoHandler {
 
