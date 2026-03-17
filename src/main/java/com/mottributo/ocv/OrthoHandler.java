@@ -206,6 +206,12 @@ public class OrthoHandler {
             partialPrevious = event.renderPartialTicks;
         }
 
+        if (!isCamTethered) {
+            // Tethers the player's head direction to the camera's. So WASD movement is aligned with the cam.
+            mc.thePlayer.rotationPitch = xRot;
+            mc.thePlayer.rotationYaw = yRot;
+        }
+
         float width = zoom * (mc.displayWidth / (float) mc.displayHeight);
         float height = zoom;
 
