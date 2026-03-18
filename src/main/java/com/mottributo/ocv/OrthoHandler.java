@@ -19,8 +19,6 @@ import cpw.mods.fml.common.gameevent.InputEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.ClientTickEvent;
 import cpw.mods.fml.common.gameevent.TickEvent.Phase;
 
-// TODO Lock movement of WASD to the position where the character's view is always set to be cardinal to the camera.
-// So far it's annoying to reposition the character while the camera is, um, yea.
 // TODO Add it as a 4th camera view mode instead of an addon triggered by pressing numpad5.
 // TODO Complete fullscreen world edit functionality.
 // So far it feels slightly compressed, perhaps it raycasts using the regular projection?..
@@ -138,7 +136,7 @@ public class OrthoHandler {
                 }
             } else if (keyRotateC.isPressed()) {
                 xRot = 30;
-                yRot = mod? -45: 45;
+                yRot = mod ? -45 : 45;
             } else if (keyRotateT.isPressed()) {
                 xRot = mod ? -90 : 90;
                 yRot = 0;
@@ -186,7 +184,6 @@ public class OrthoHandler {
         if (!isEnabled || evt.phase != Phase.START) {
             return;
         }
-
         tick++;
     }
 
@@ -322,7 +319,6 @@ public class OrthoHandler {
         if (debugMode) {
             event.right.add("----OCV DEBUG MODE ON----");
             event.right.add("isEnabled: " + isEnabled);
-            event.right.add("isCamTethered: " + isCamTethered);
             event.right.add("zoom: " + zoom);
             event.right.add("xRot, yRot: " + xRot + ", " + yRot);
             event.right.add(mc.displayWidth + "-" + mc.displayHeight);
