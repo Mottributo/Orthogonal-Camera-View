@@ -65,6 +65,10 @@ public class OrthoHandler {
     private float xRot;
     private float yRot;
 
+    // exposed for debugMode for orthoMouseOver stuff. TODO delete after orthoMouseOver is finished
+    private Vec3 from = Vec3.createVectorHelper(0, 0, 0);
+    private Vec3 to = Vec3.createVectorHelper(0, 0, 0);
+
     private int tick;
     private int tickPrevious;
     private double partialPrevious;
@@ -187,7 +191,7 @@ public class OrthoHandler {
         tick++;
     }
 
-    // This seems to fire every tick while the ortho mode is enabled.
+    // This fires every tick while the ortho mode is enabled.
     // Allegedly, before the fog density is calculated - this keeps fog relative to the player's position.
     @SubscribeEvent
     public void onFogDensity(EntityViewRenderEvent.FogDensity event) {
@@ -265,39 +269,54 @@ public class OrthoHandler {
 
     }
 
-    // Determines how to edit the world given the free mouse.
-    // TODO total rewrite with a mixin to override the original block selection code.
-    // The original block selection procedure converts player position data and player head rotation data
-    // to two block coordinates,
+    // Determines which block or entity is highlighted by the mouse in non-tethered controls mode.
     private void getOrthoMouseOver(Minecraft mc, float partialTicks) {
         // Do nothing if nothing to render?
         if (mc.renderViewEntity == null) return;
         // Do nothing if no world yet to edit.
         if (mc.theWorld == null) return;
 
-        float width = zoom * (mc.displayWidth / (float) mc.displayHeight);
-        float height = zoom * (mc.displayHeight / (float) mc.displayWidth);
+        float aspect = mc.displayWidth / (float) mc.displayHeight;
+        float width = zoom * aspect;
+        float height = zoom;
 
-        // normalize mouse to -1..1
-
+        // Normalize mouse to -1..1
         float mx = ((float) Mouse.getX() / mc.displayWidth - 0.5F) * 2.0F;
-        float my = ((float) Mouse.getY() / mc.displayHeight - 0.5F) * 2.0F;
-        // The fuck this does?
-        float rotate_z = MathHelper.cos(-yRot * 0.017453292F - (float) Math.PI);
-        float rotate_x = MathHelper.sin(-yRot * 0.017453292F - (float) Math.PI);
-        float rotate_xz = -MathHelper.cos(-xRot * 0.017453292F);
-        float rotate_y = MathHelper.sin(-xRot * 0.017453292F);
+        float my = -((float) Mouse.getY() / mc.displayHeight - 0.5F) * 2.0F;
 
-        Vec3 look = Vec3.createVectorHelper((double) (rotate_x * rotate_xz), (double) rotate_y, (double) (rotate_z * rotate_xz));
+        final float dtr = 0.017453292F; // degrees to radians
+        float cosYaw = MathHelper.cos(-yRot * dtr - (float) Math.PI);
+        float sinYaw = MathHelper.sin(-yRot * dtr - (float) Math.PI);
+        float cosPitch = -MathHelper.cos(-xRot * dtr);
+        float sinPitch = MathHelper.sin(-xRot * dtr);
+
+        // Forward vector (look direction)
+        Vec3 look = Vec3.createVectorHelper(sinYaw * cosPitch, sinPitch, cosYaw * cosPitch);
+
+        // Right vector: cross(worldUp, look), then normalize
+        // For the horizontal axis of the screen
+        Vec3 right = Vec3.createVectorHelper(cosYaw, 0, -sinYaw);
+
+        // Up vector: cross(look, right), then normalize
+        // For the vertical axis of the screen
+        Vec3 up = Vec3.createVectorHelper(-sinYaw * sinPitch, cosPitch, -cosYaw * sinPitch);
+
         Vec3 pos = mc.renderViewEntity.getPosition(partialTicks);
 
-        // Move to mouse position
-        Vec3 from = pos.addVector((double) (-rotate_z * rotate_xz) * mx * width, 0, (double) (rotate_x * rotate_xz) * mx * height);
-        Vec3 to = from.addVector(look.xCoord * 16, look.yCoord * 16, look.zCoord * 16);
+        // FIXME this is not reliable solution on high zoom values or high tilt (yRot) values.
+        // As the raycast is either not long enough or overshoots the world.
+        final float rayLength = 128F;
+        final float halfRay = rayLength / 2F;
+
+        from = pos.addVector(
+            right.xCoord * mx * width + up.xCoord * my * height - look.xCoord * halfRay,
+            right.yCoord * mx * width + up.yCoord * my * height - look.yCoord * halfRay,
+            right.zCoord * mx * width + up.zCoord * my * height - look.zCoord * halfRay);
+
+        to = from.addVector(look.xCoord * rayLength, look.yCoord * rayLength, look.zCoord * rayLength);
 
         mc.pointedEntity = null;
         mc.objectMouseOver = mc.theWorld.rayTraceBlocks(from, to);
-
     }
 
     @SubscribeEvent
@@ -321,6 +340,16 @@ public class OrthoHandler {
             event.right.add("isEnabled: " + isEnabled);
             event.right.add("zoom: " + zoom);
             event.right.add("xRot, yRot: " + xRot + ", " + yRot);
+            event.right.add("from: " + (int) from.xCoord + " " + (int) from.yCoord + " " + (int) from.zCoord);
+            event.right.add("to: " + (int) to.xCoord + " " + (int) to.yCoord + " " + (int) to.zCoord);
+            if (mc.objectMouseOver != null) {
+                event.right.add(
+                    "M.O.P.: " + mc.objectMouseOver.blockX
+                        + "-"
+                        + mc.objectMouseOver.blockY
+                        + "-"
+                        + mc.objectMouseOver.blockZ);
+            } else event.right.add("M.O.P.: null");
             event.right.add(mc.displayWidth + "-" + mc.displayHeight);
             for (int key = 0; key < Keyboard.KEYBOARD_SIZE; key++) {
                 if (Keyboard.isKeyDown(key)) {
